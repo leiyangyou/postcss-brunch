@@ -45,7 +45,7 @@ class PostCSSCompiler {
 		const proc = cfg && cfg.processors || [];
 		this.map = this.config.map ?
 			Object.assign({}, defaultMapper, this.config.map) :
-			defaultMapper;
+			(this.config.map !== false) ? defaultMapper : false;
 		const progenyOpts = Object.assign({rootPath, reverseArgs: true}, cfg.progeny);
 		this.getDependencies = progeny(progenyOpts);
 		this.processor = postcss(proc);
@@ -56,22 +56,27 @@ class PostCSSCompiler {
 		const path = file.path;
 		const opts = {from: path, to: sysPath.basename(path), map: this.map};
 
-		if (file.map) {
-			opts.map.prev = file.map.toJSON();
+		if (this.map && file.map) {
+			if (file.map.toJSON) {
+			   opts.map.prev = file.map.toJSON();
+			}
 		}
 
 		return this.processor.process(file.data, opts).then(result => {
 			notify(result.warnings());
-
-			const mapping = result.map.toJSON();
-			// Not sure why postcss gives the basename instead of the full path;
-			// TODO: investigate.
-			// For now, "the solution":
-			const src = mapping.sources;
-			if (src && src.length === 1 && src[0] === sysPath.basename(path)) {
-				src[0] = path;
+			let mapping = false;
+			
+            if (result.map) {
+				mapping = result.map.toJSON();
+				// Not sure why postcss gives the basename instead of the full path;
+				// TODO: investigate.
+				// For now, "the solution":
+				const src = mapping.sources;
+				if (src && src.length === 1 && src[0] === sysPath.basename(path)) {
+					src[0] = path;
+				}
 			}
-
+			
 			if (this.modules) {
 				const moduleOptions = this.modules === true ? {} : this.modules;
 				return cssModulify(path, result.css, mapping, moduleOptions);
